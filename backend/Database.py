@@ -9,6 +9,7 @@ class Database:
         self._mysql = sql_object
         self._queries = queries
         self._results = Data()
+        self._execute_dict = None
 
     def update_case(self, input: str) -> str:
         """Given a string as input, will ensure only
@@ -50,12 +51,24 @@ class Database:
     def execute(self):
         """Executes the list of queries given to the Database Class."""
         cursor = self._mysql.connection.cursor()
+        print("FAILED")
         for query in self._queries:
-            cursor.execute(query)
+            if self._execute_dict is None:
+                print("It is none")
+                cursor.execute(query)
+            else:
+                print("attempt that one")
+                cursor.execute(query, self._execute_dict)
 
         self._results.set_data(cursor.fetchall())
         self._queries = []
 
+    def create_execution_dict(self, keys, values):
+        """Creates a dictionary to pass to the execution function to 
+        protect against injection."""
+        self._execute_dict = {}
+        for index in range(len(keys)):
+            self._execute_dict[keys[index]] = values[index]
 
     def add_select(self, columns: list, table: str, append=''):
         """Adds a query to the list of queries with the given
@@ -83,12 +96,21 @@ class Database:
         # Ensure proper table case
         table = self.update_case(table)
 
+        self.create_execution_dict(columns, values)
+
+        print(self._execute_dict)
+
+        f_values = []
+        for index in range(len(columns)):
+            f_values.append(f'%({columns[index]})s')
+    
         # Convert list values into strings
         columns_str = ','.join(columns)
-        values_str = ','.join(values)
+        values_str = ','.join(f_values)
+
 
         # Build Insert query
-        query = 'INSERT INTO ' + table + ' (' + columns_str + ') VALUES ' + '(' + values_str + ')'
+        query = 'INSERT INTO ' + table.capitalize() + ' (' + columns_str + ') VALUES ' + '(' + values_str + ')'
 
         if append != '':
             query += ' ' + append
@@ -97,20 +119,6 @@ class Database:
 
         # Build append search to get only the item
         # added back from the SQL table
-        append = 'WHERE '
-        for index in range(len(columns)):
-            if index == 0:
-                temp = str(columns[index]) + "=" + str(values[index])
-                append += temp
-            else:
-                temp = " AND " + str(columns[index]) + "=" + str(values[index])
-                append += temp
-
-        append += ";"
-
-        self.add_select(columns, table, append)
-
-
 
     def add_update(self, table: str, set_pairs: list, filter='', append=''):
         """Adds an UPDATE query to the current list of queries given
